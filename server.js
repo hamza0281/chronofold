@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// server.js — HTTP host: GET /, POST /run {path}, GET /events/:id (SSE), GET /state/:id.
+// server.js — HTTP host: GET /, POST /run, GET /events|state|snapshot/:id.
 import { createServer } from 'node:http';
 import { existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { runStream } from './engine.js';
+import { SnapshotRing } from './snapshot.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 7777;
@@ -25,28 +26,22 @@ async function readBody(req) {
 
 export function startRun(absPath) {
   const id = randomUUID();
-  const rec = { events: [], done: false, listeners: new Set(), result: null, error: null };
+  const ring = new SnapshotRing();
+  const rec = { events: [], done: false, listeners: new Set(), result: null, error: null, ring };
   runs.set(id, rec);
   (async () => {
     try {
-      for await (const ev of runStream(absPath)) {
+      for await (const ev of runStream(absPath, { ring })) {
         broadcast(rec, ev);
         if (ev.type === 'done') rec.result = { state: [...ev.state.entries()], errors: ev.errors, stats: ev.stats };
       }
-    } catch (err) {
-      rec.error = err.message;
-      broadcast(rec, { type: 'error', message: err.message });
-    } finally {
-      rec.done = true;
-      for (const fn of rec.listeners) fn({ type: 'close' });
-    }
+    } catch (err) { rec.error = err.message; broadcast(rec, { type: 'error', message: err.message }); }
+    finally { rec.done = true; for (const fn of rec.listeners) fn({ type: 'close' }); }
   })();
   return id;
 }
 
-function sse(req, res, id) {
-  const rec = runs.get(id);
-  if (!rec) return send(res, 404, { error: 'unknown run' });
+function sse(req, res, rec) {
   res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', 'connection': 'keep-alive', 'x-accel-buffering': 'no' });
   const w = (ev) => res.write(`data: ${JSON.stringify(ev)}\n\n`);
   for (const ev of rec.events) w(ev);
@@ -69,11 +64,15 @@ export const server = createServer(async (req, res) => {
       if (!existsSync(abs) || !statSync(abs).isFile()) return send(res, 400, { error: 'file not found' });
       return send(res, 200, { runId: startRun(abs), path: abs });
     }
-    const m = path.match(/^\/(events|state)\/([0-9a-f-]+)$/i);
+    const m = path.match(/^\/(events|state|snapshot)\/([0-9a-f-]+)(?:\/(\d+))?$/i);
     if (req.method === 'GET' && m) {
-      if (m[1] === 'events') return sse(req, res, m[2]);
       const rec = runs.get(m[2]);
       if (!rec) return send(res, 404, { error: 'unknown run' });
+      if (m[1] === 'events') return sse(req, res, rec);
+      if (m[1] === 'snapshot') {
+        const idx = Number(m[3] ?? 0);
+        return send(res, 200, { index: idx, state: [...rec.ring.stateAt(idx).entries()] });
+      }
       if (!rec.done) return send(res, 202, { status: 'running' });
       return rec.error ? send(res, 500, { error: rec.error }) : send(res, 200, rec.result);
     }

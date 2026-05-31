@@ -32,6 +32,11 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .err{display:flex;justify-content:space-between;font:12px JetBrains Mono,Menlo,Consolas,monospace;padding:4px 0;color:var(--accent)}
 .err .l{color:var(--muted)}
 #errlist{max-height:240px;overflow:auto}
+#tt{display:none}
+#tt.show{display:block}
+input[type=range]{width:100%;accent-color:var(--accent);margin:8px 0}
+.tt-row{display:flex;justify-content:space-between;font:12px JetBrains Mono,Menlo,Consolas,monospace;color:var(--muted)}
+#ttlist{max-height:240px;overflow:auto;margin-top:10px}
 .banner{display:none;padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:14px}
 .banner.show{display:block}
 .banner.err{background:#F6E2DB;border:1px solid var(--accent);color:var(--accent)}
@@ -53,6 +58,12 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin-top:36px;lette
 <div class="split">
   <div class="card"><div class="h">Top entities by value</div><div id="leaderboard" class="mono"></div></div>
   <div class="card"><div class="h">Recent rejections</div><div id="errlist"></div></div></div>
+<div id="tt" class="card">
+  <div class="h">Time travel</div>
+  <input id="ttslider" type="range" min="0" max="0" value="0">
+  <div class="tt-row"><span>event 0</span><span id="ttat">at 0</span><span id="ttmax">0</span></div>
+  <div id="ttlist" class="mono"></div>
+</div>
 <footer>chronofold • zero dependencies</footer></div>
 <script>
 const $=id=>document.getElementById(id), fmt=n=>Number(n).toLocaleString();
@@ -70,7 +81,7 @@ function render(ev){
     const lb=$('leaderboard');lb.innerHTML='';
     (ev.top||[]).forEach(([k,v])=>{const r=document.createElement('div');r.className='lb';r.innerHTML='<span class="n">'+k+'</span><span>'+fmt(v)+'</span>';lb.appendChild(r)});
   }
-  if(ev.type==='done'){$('go').disabled=false;setBanner('ok',`Done in ${ev.stats.elapsedMs.toFixed(0)} ms — ${fmt(ev.stats.processed)} events folded`);fetchErrors()}
+  if(ev.type==='done'){$('go').disabled=false;setBanner('ok',`Done in ${ev.stats.elapsedMs.toFixed(0)} ms — ${fmt(ev.stats.processed)} events folded`);fetchErrors();initTT(ev.stats.processed)}
   if(ev.type==='error'){$('go').disabled=false;setBanner('err','Engine error: '+ev.message)}
 }
 async function fetchErrors(){
@@ -85,7 +96,7 @@ async function fetchErrors(){
 async function start(){
   const path=$('path').value.trim();
   if(!path){setBanner('err','Provide a path to a JSONL file.');return}
-  $('go').disabled=true;clearBanner();$('errlist').innerHTML='';$('leaderboard').innerHTML='';
+  $('go').disabled=true;clearBanner();$('errlist').innerHTML='';$('leaderboard').innerHTML='';$('tt').classList.remove('show');
   if(es){es.close();es=null}
   try{
     const r=await fetch('/run',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({path})});
@@ -98,4 +109,19 @@ async function start(){
 }
 $('go').addEventListener('click',start);
 $('path').addEventListener('keydown',e=>{if(e.key==='Enter')start()});
+let ttTimer=null;
+function initTT(max){
+  const tt=$('tt'),s=$('ttslider');
+  tt.classList.add('show');s.min=0;s.max=max;s.value=max;$('ttmax').textContent=fmt(max);loadTT(max);
+  s.oninput=()=>{$('ttat').textContent='at '+fmt(+s.value);clearTimeout(ttTimer);ttTimer=setTimeout(()=>loadTT(+s.value),150)};
+}
+async function loadTT(idx){
+  if(!window._runId)return;
+  try{const r=await fetch('/snapshot/'+window._runId+'/'+idx);if(!r.ok)return;const d=await r.json();
+    const list=$('ttlist');list.innerHTML='';
+    const top=d.state.sort((a,b)=>b[1]-a[1]).slice(0,10);
+    top.forEach(([k,v])=>{const r=document.createElement('div');r.className='lb';r.innerHTML='<span class="n">'+k+'</span><span>'+fmt(v)+'</span>';list.appendChild(r)});
+    if(!top.length)list.innerHTML='<div class="hint">empty state at this point</div>';
+  }catch{}
+}
 </script></body></html>

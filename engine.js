@@ -18,6 +18,7 @@ const PROGRESS_INTERVAL_MS = 100;
 
 export async function* runStream(input, opts = {}) {
   const interval = opts.interval ?? PROGRESS_INTERVAL_MS;
+  const ring = opts.ring ?? null;
   let stream, totalBytes = 0;
   if (typeof input === 'string') {
     totalBytes = (await stat(input)).size;
@@ -64,6 +65,7 @@ export async function* runStream(input, opts = {}) {
     }
     apply(event, state);
     stats.valid++;
+    if (ring) ring.observe(lineNo, event, state);
 
     const now = performance.now();
     if (now - lastEmit >= interval) {
