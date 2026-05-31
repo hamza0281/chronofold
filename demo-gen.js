@@ -1,36 +1,29 @@
 #!/usr/bin/env node
-// demo-gen.js — synthetic event generator for Chronofold.
-// Usage: node demo-gen.js [count=100000] [out=demo.jsonl] [seed=42]
-// Pass '-' as out to write to stdout. Output is deterministic per seed.
-
+// demo-gen.js [count] [out] [seed] [scenario] — scenarios: crypto|banking|inventory
 import { createWriteStream } from 'node:fs';
-
-const N = Number(process.argv[2]) || 100_000;
-const OUT = process.argv[3] || 'demo.jsonl';
-let seed = (Number(process.argv[4]) || 42) >>> 0;
-
-// Mulberry-style LCG. Tiny, deterministic, good enough for synthetic data.
+const N = +process.argv[2] || 100_000, OUT = process.argv[3] || 'demo.jsonl';
+let seed = (+process.argv[4] || 42) >>> 0; const scen = process.argv[5] || 'crypto';
 const rand = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32;
-const pick = (arr) => arr[Math.floor(rand() * arr.length)];
-
-const users = Array.from({ length: 1000 }, (_, i) => `wallet_${i.toString(16).padStart(4, '0')}`);
-const sink = OUT === '-' ? process.stdout : createWriteStream(OUT);
-const writeLine = (s) => sink.write(s + '\n');
-
-let written = 0;
+const pick = (a) => a[Math.floor(rand() * a.length)];
+const users = Array.from({ length: 1000 }, (_, i) => `acct_${i.toString(16).padStart(4, '0')}`);
+const SCEN = {
+  crypto:    ['mint',    'burn',     'transfer', 1000, 200],
+  banking:   ['deposit', 'withdraw', 'transfer', 5000, 1000],
+  inventory: ['mint',    'withdraw', 'transfer', 200,  30],
+};
+const [credit, debit, pair, cMax, pMax] = SCEN[scen] || SCEN.crypto;
+const sink = OUT === '-' ? process.stdout : createWriteStream(OUT), w = (s) => sink.write(s + '\n');
 for (let i = 0; i < N; i++) {
-  const r = rand();
-  if (r < 0.001)      writeLine('{"type":"transfer","from":"' + pick(users) + ',amount:'); // 0.1% corrupt
-  else if (r < 0.006) writeLine(JSON.stringify({ type: 'transfer', from: pick(users), amount: 100 })); // 0.5% missing 'to'
-  else if (r < 0.011) writeLine(JSON.stringify({ type: 'transfer', from: pick(users), to: pick(users), amount: -50 })); // 0.5% negative
-  else if (r < 0.31)  writeLine(JSON.stringify({ type: 'deposit', user: pick(users), amount: Math.floor(rand() * 1000) + 1 }));
+  const x = rand();
+  if (x < 0.001)      w(`{"type":"${pair}","from":"${pick(users)},amount:`);
+  else if (x < 0.006) w(JSON.stringify({ type: pair, from: pick(users), amount: 100 }));
+  else if (x < 0.011) w(JSON.stringify({ type: debit, user: pick(users), amount: -50 }));
+  else if (x < 0.31)  w(JSON.stringify({ type: credit, user: pick(users), amount: Math.floor(rand() * cMax) + 1 }));
   else {
     let from = pick(users), to = pick(users);
     if (from === to) to = users[(users.indexOf(to) + 1) % users.length];
-    writeLine(JSON.stringify({ type: 'transfer', from, to, amount: Math.floor(rand() * 200) + 1 }));
+    w(JSON.stringify({ type: pair, from, to, amount: Math.floor(rand() * pMax) + 1 }));
   }
-  written++;
 }
-
-const finish = () => process.stderr.write(`generated ${written} events → ${OUT === '-' ? 'stdout' : OUT}\n`);
+const finish = () => process.stderr.write(`generated ${N} ${scen} events → ${OUT === '-' ? 'stdout' : OUT}\n`);
 if (sink === process.stdout) finish(); else sink.end(finish);

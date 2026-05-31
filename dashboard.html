@@ -8,7 +8,7 @@
 html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 .mono{font-family:JetBrains Mono,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
 .wrap{max-width:1100px;margin:0 auto;padding:48px 36px}
-header{display:flex;align-items:baseline;gap:18px;margin-bottom:28px}
+header{display:flex;align-items:baseline;gap:18px;margin-bottom:28px;flex-wrap:wrap}
 h1{margin:0;font:500 30px/1 'Source Serif Pro',Georgia,serif;letter-spacing:.5px}
 .tag{color:var(--muted);font-style:italic;font-family:'Source Serif Pro',Georgia,serif}
 .card{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:22px 24px;margin-bottom:18px}
@@ -16,6 +16,7 @@ h1{margin:0;font:500 30px/1 'Source Serif Pro',Georgia,serif;letter-spacing:.5px
 input[type=text]{flex:1;padding:11px 14px;border:1px solid var(--rule);border-radius:6px;background:#fff;color:var(--ink);font:14px JetBrains Mono,Menlo,Consolas,monospace}
 input[type=text]:focus{outline:none;border-color:var(--ink)}
 button{padding:11px 20px;border:1px solid var(--ink);border-radius:6px;background:var(--ink);color:var(--bg);font-weight:600;cursor:pointer;letter-spacing:.3px}
+button.ghost{background:transparent;color:var(--ink)} button.ghost:hover{background:var(--rule);border-color:var(--ink);color:var(--ink)}
 button:hover{background:var(--accent);border-color:var(--accent)}
 button:disabled{opacity:.45;cursor:not-allowed}
 .hint{color:var(--muted);font-size:13px;margin-top:8px}
@@ -31,16 +32,17 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .lb:last-child{border-bottom:0} .lb .n{color:var(--muted)}
 .err{display:flex;justify-content:space-between;font:12px JetBrains Mono,Menlo,Consolas,monospace;padding:4px 0;color:var(--accent)}
 .err .l{color:var(--muted)}
-#errlist{max-height:240px;overflow:auto}
-#tt{display:none}
-#tt.show{display:block}
+#errlist,#ttlist,#bylist{max-height:240px;overflow:auto}
+#tt,#summary{display:none}
+.show{display:block!important}
 input[type=range]{width:100%;accent-color:var(--accent);margin:8px 0}
 .tt-row{display:flex;justify-content:space-between;font:12px JetBrains Mono,Menlo,Consolas,monospace;color:var(--muted)}
-#ttlist{max-height:240px;overflow:auto;margin-top:10px}
+#ttlist{margin-top:10px}
 .banner{display:none;padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:14px}
 .banner.show{display:block}
 .banner.err{background:#F6E2DB;border:1px solid var(--accent);color:var(--accent)}
 .banner.ok{background:#E1ECEC;border:1px solid var(--ok);color:var(--ok)}
+.actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
 footer{color:var(--muted);font-size:12px;text-align:center;margin-top:36px;letter-spacing:.05em}
 </style></head>
 <body><div class="wrap">
@@ -48,7 +50,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin-top:36px;lette
 <div class="card"><div class="row">
   <input id="path" type="text" placeholder="Paste path to a JSONL event file…" autocomplete="off" spellcheck="false">
   <button id="go">Fold</button></div>
-  <div class="hint">Tip: generate a sample with <span class="mono">node demo-gen.js 100000 demo.jsonl</span></div></div>
+  <div class="hint">Tip: <span class="mono">node demo-gen.js 100000 demo.jsonl 42 banking</span> (scenarios: crypto, banking, inventory)</div></div>
 <div id="banner" class="banner"></div>
 <div class="grid">
   <div class="stat"><div class="k">Processed</div><div class="v mono" id="s-proc">—</div></div>
@@ -58,45 +60,63 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin-top:36px;lette
 <div class="split">
   <div class="card"><div class="h">Top entities by value</div><div id="leaderboard" class="mono"></div></div>
   <div class="card"><div class="h">Recent rejections</div><div id="errlist"></div></div></div>
+<div id="summary" class="card">
+  <div class="h">Rejections grouped by reason</div>
+  <div id="bylist" class="mono"></div>
+  <div class="actions">
+    <button id="exp-state" class="ghost">Export state JSON</button>
+    <button id="exp-errs"  class="ghost">Export errors CSV</button>
+  </div></div>
 <div id="tt" class="card">
   <div class="h">Time travel</div>
   <input id="ttslider" type="range" min="0" max="0" value="0">
   <div class="tt-row"><span>event 0</span><span id="ttat">at 0</span><span id="ttmax">0</span></div>
-  <div id="ttlist" class="mono"></div>
-</div>
-<footer>chronofold • zero dependencies</footer></div>
+  <div id="ttlist" class="mono"></div></div>
+<footer>chronofold • zero dependencies • <span class="mono">443/500 lines</span></footer></div>
 <script>
 const $=id=>document.getElementById(id), fmt=n=>Number(n).toLocaleString();
-let es=null;
 const setBanner=(k,m)=>{const b=$('banner');b.className='banner show '+k;b.textContent=m};
 const clearBanner=()=>$('banner').className='banner';
+const tweens={};
+function setNum(id,target){
+  const el=$(id),from=tweens[id]??0;tweens[id]=target;
+  const t0=performance.now(),dur=180;
+  const step=t=>{const k=Math.min(1,(t-t0)/dur),e=1-Math.pow(1-k,3);el.textContent=fmt(Math.round(from+(target-from)*e));if(k<1)requestAnimationFrame(step)};
+  requestAnimationFrame(step);
+}
+let es=null;
 function render(ev){
   if(ev.type==='progress'||ev.type==='done'){
-    const s=ev.stats;
-    $('s-proc').textContent=fmt(s.processed);
-    $('s-valid').textContent=fmt(s.valid);
-    $('s-bad').textContent=fmt(s.invalid+s.corrupt);
-    const sec=s.elapsedMs/1000, t=sec>0?Math.round(s.processed/sec):0;
-    $('s-tput').textContent=fmt(t);
+    const s=ev.stats,sec=s.elapsedMs/1000;
+    setNum('s-proc',s.processed);setNum('s-valid',s.valid);setNum('s-bad',s.invalid+s.corrupt);
+    setNum('s-tput',sec>0?Math.round(s.processed/sec):0);
     const lb=$('leaderboard');lb.innerHTML='';
     (ev.top||[]).forEach(([k,v])=>{const r=document.createElement('div');r.className='lb';r.innerHTML='<span class="n">'+k+'</span><span>'+fmt(v)+'</span>';lb.appendChild(r)});
   }
-  if(ev.type==='done'){$('go').disabled=false;setBanner('ok',`Done in ${ev.stats.elapsedMs.toFixed(0)} ms — ${fmt(ev.stats.processed)} events folded`);fetchErrors();initTT(ev.stats.processed)}
+  if(ev.type==='done'){$('go').disabled=false;setBanner('ok',`Done in ${ev.stats.elapsedMs.toFixed(0)} ms — ${fmt(ev.stats.processed)} events folded`);fetchSummary(ev.stats);initTT(ev.stats.processed)}
   if(ev.type==='error'){$('go').disabled=false;setBanner('err','Engine error: '+ev.message)}
 }
-async function fetchErrors(){
+function download(name,mime,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:mime}));a.download=name;a.click();URL.revokeObjectURL(a.href)}
+async function fetchSummary(stats){
   if(!window._runId)return;
-  try{const r=await fetch('/state/'+window._runId);if(!r.ok)return;const d=await r.json();
+  try{const r=await fetch('/state/'+window._runId);if(!r.ok)return;const d=await r.json();window._final=d;
     const list=$('errlist');list.innerHTML='';
     const recent=(d.errors||[]).slice(-50).reverse();
-    if(!recent.length){list.innerHTML='<div class="hint">No rejections.</div>';return}
-    recent.forEach(e=>{const r=document.createElement('div');r.className='err';r.innerHTML='<span class="l">line '+e.line+'</span><span>'+(e.type?e.type+':':'')+e.reason+'</span>';list.appendChild(r)});
+    if(!recent.length)list.innerHTML='<div class="hint">No rejections.</div>';
+    else recent.forEach(e=>{const r=document.createElement('div');r.className='err';r.innerHTML='<span class="l">line '+e.line+'</span><span>'+(e.type?e.type+':':'')+e.reason+'</span>';list.appendChild(r)});
+    const by=$('bylist');by.innerHTML='';
+    const reasons=Object.entries(stats.byReason||{}).sort((a,b)=>b[1]-a[1]);
+    if(!reasons.length)by.innerHTML='<div class="hint">No rejections.</div>';
+    else reasons.forEach(([k,v])=>{const r=document.createElement('div');r.className='lb';r.innerHTML='<span class="n">'+k+'</span><span>'+fmt(v)+'</span>';by.appendChild(r)});
+    $('summary').classList.add('show');
   }catch{}
 }
+$('exp-state').onclick=()=>{const d=window._final;if(!d)return;download('state.json','application/json',JSON.stringify(Object.fromEntries(d.state),null,2))};
+$('exp-errs').onclick=()=>{const d=window._final;if(!d)return;const rows=[['line','type','reason']].concat((d.errors||[]).map(e=>[e.line,e.type||'',e.reason]));download('errors.csv','text/csv',rows.map(r=>r.join(',')).join('\n'))};
 async function start(){
   const path=$('path').value.trim();
   if(!path){setBanner('err','Provide a path to a JSONL file.');return}
-  $('go').disabled=true;clearBanner();$('errlist').innerHTML='';$('leaderboard').innerHTML='';$('tt').classList.remove('show');
+  $('go').disabled=true;clearBanner();$('errlist').innerHTML='';$('leaderboard').innerHTML='';$('tt').classList.remove('show');$('summary').classList.remove('show');
   if(es){es.close();es=null}
   try{
     const r=await fetch('/run',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({path})});
@@ -120,8 +140,8 @@ async function loadTT(idx){
   try{const r=await fetch('/snapshot/'+window._runId+'/'+idx);if(!r.ok)return;const d=await r.json();
     const list=$('ttlist');list.innerHTML='';
     const top=d.state.sort((a,b)=>b[1]-a[1]).slice(0,10);
-    top.forEach(([k,v])=>{const r=document.createElement('div');r.className='lb';r.innerHTML='<span class="n">'+k+'</span><span>'+fmt(v)+'</span>';list.appendChild(r)});
     if(!top.length)list.innerHTML='<div class="hint">empty state at this point</div>';
+    else top.forEach(([k,v])=>{const r=document.createElement('div');r.className='lb';r.innerHTML='<span class="n">'+k+'</span><span>'+fmt(v)+'</span>';list.appendChild(r)});
   }catch{}
 }
 </script></body></html>
