@@ -1,0 +1,24 @@
+{
+  "name": "chronofold",
+  "version": "0.0.1",
+  "description": "Fold a million events into one truth. Zero-dependency, fault-tolerant event-sourced state engine in vanilla JavaScript.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "demo": "node demo-gen.js",
+    "engine": "node engine.js",
+    "lines": "node tools/count-lines.mjs"
+  },
+  "keywords": [
+    "event-sourcing",
+    "data-processing",
+    "streaming",
+    "validation",
+    "code-olympics-2026"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,24 @@
+# Dependencies (we have none, but just in case)
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Demo / generated data files
+*.jsonl
+demo*.json
+out/
+tmp/
+*.log
+
+# Env
+.env
+.env.local
