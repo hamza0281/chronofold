@@ -99,8 +99,10 @@ section('rules.js — pure validator unit tests');
   assertEq(validate('string', s)?.rule, 'not_object', 'non-object event rejected');
   assertEq(validate({ type: 123 }, s)?.rule, 'missing_type', 'numeric type rejected');
 
-  assertTrue(Array.isArray(rules.deposit) && Array.isArray(rules.transfer),
-    'rules export contains deposit and transfer');
+  assertTrue(rules.deposit && Array.isArray(rules.deposit.validate) && typeof rules.deposit.apply === 'function',
+    'rules export shape: deposit has validate[] + apply()');
+  assertTrue(rules.transfer && Array.isArray(rules.transfer.validate) && typeof rules.transfer.apply === 'function',
+    'rules export shape: transfer has validate[] + apply()');
 }
 
 // ─────────────────────────────────────────────────────────────────────────

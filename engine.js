@@ -10,9 +10,10 @@ import { stat } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
-import { validate } from './rules.js';
+import { validate, apply } from './rules.js';
 
-const MAX_STORED_ERRORS = 1000;
+const MAX_STORED_ERRORS = 10_000;
+const MAX_STORED_CORRUPT = 100;
 const PROGRESS_INTERVAL_MS = 100;
 
 export async function* runStream(input, opts = {}) {
@@ -32,6 +33,7 @@ export async function* runStream(input, opts = {}) {
     totalBytes, elapsedMs: 0, byReason: Object.create(null),
   };
   const errors = [];
+  let storedCorrupt = 0;
   const t0 = performance.now();
   let lastEmit = t0;
   let lineNo = 0;
@@ -45,8 +47,10 @@ export async function* runStream(input, opts = {}) {
     catch {
       stats.corrupt++;
       stats.byReason.corrupt_json = (stats.byReason.corrupt_json || 0) + 1;
-      if (errors.length < MAX_STORED_ERRORS)
+      if (storedCorrupt < MAX_STORED_CORRUPT && errors.length < MAX_STORED_ERRORS) {
         errors.push({ line: lineNo, reason: 'corrupt_json', raw: raw.slice(0, 80) });
+        storedCorrupt++;
+      }
       continue;
     }
     const fail = validate(event, state);
@@ -80,14 +84,6 @@ export async function run(input) {
 }
 
 function snap(s) { return { ...s, byReason: { ...s.byReason } }; }
-
-function apply(e, s) {
-  if (e.type === 'deposit') s.set(e.user, (s.get(e.user) ?? 0) + e.amount);
-  else if (e.type === 'transfer') {
-    s.set(e.from, s.get(e.from) - e.amount);
-    s.set(e.to, (s.get(e.to) ?? 0) + e.amount);
-  }
-}
 
 function topN(state, n = 10) {
   return [...state.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
