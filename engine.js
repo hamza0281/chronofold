@@ -1,67 +1,89 @@
 #!/usr/bin/env node
 // engine.js — Chronofold core.
-// Streams a JSONL file line-by-line, parses, validates, and folds events
-// into a Map-based state. Memory is constant regardless of file size.
+// Streams a JSONL source line-by-line, parses, validates, and folds events
+// into a Map-based state. Constant memory regardless of file size.
+// runStream() yields progress + done events for live UIs.
+// run() is a Promise-returning convenience wrapper for CLI / tests.
 
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { performance } from 'node:perf_hooks';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { validate } from './rules.js';
 
 const MAX_STORED_ERRORS = 1000;
+const PROGRESS_INTERVAL_MS = 100;
 
-export async function run(path) {
-  const fileSize = (await stat(path)).size;
-  const stream = createReadStream(path, { encoding: 'utf8' });
+export async function* runStream(input, opts = {}) {
+  const interval = opts.interval ?? PROGRESS_INTERVAL_MS;
+  let stream, totalBytes = 0;
+  if (typeof input === 'string') {
+    totalBytes = (await stat(input)).size;
+    stream = createReadStream(input, { encoding: 'utf8' });
+  } else {
+    stream = input;
+    if (typeof stream.setEncoding === 'function') stream.setEncoding('utf8');
+  }
   const lines = createInterface({ input: stream, crlfDelay: Infinity });
-
   const state = new Map();
   const stats = {
     processed: 0, valid: 0, invalid: 0, corrupt: 0,
-    totalBytes: fileSize, elapsedMs: 0,
-    byReason: Object.create(null),
+    totalBytes, elapsedMs: 0, byReason: Object.create(null),
   };
   const errors = [];
   const t0 = performance.now();
-
+  let lastEmit = t0;
   let lineNo = 0;
+
   for await (const raw of lines) {
     lineNo++;
     if (raw.length === 0) continue;
     stats.processed++;
-
     let event;
     try { event = JSON.parse(raw); }
     catch {
       stats.corrupt++;
       stats.byReason.corrupt_json = (stats.byReason.corrupt_json || 0) + 1;
-      if (errors.length < MAX_STORED_ERRORS) errors.push({ line: lineNo, reason: 'corrupt_json', raw: raw.slice(0, 80) });
+      if (errors.length < MAX_STORED_ERRORS)
+        errors.push({ line: lineNo, reason: 'corrupt_json', raw: raw.slice(0, 80) });
       continue;
     }
-
     const fail = validate(event, state);
     if (fail) {
       stats.invalid++;
       const key = `${fail.type}:${fail.rule}`;
       stats.byReason[key] = (stats.byReason[key] || 0) + 1;
-      if (errors.length < MAX_STORED_ERRORS) errors.push({ line: lineNo, reason: fail.rule, type: fail.type });
+      if (errors.length < MAX_STORED_ERRORS)
+        errors.push({ line: lineNo, reason: fail.rule, type: fail.type });
       continue;
     }
-
     apply(event, state);
     stats.valid++;
-  }
 
+    const now = performance.now();
+    if (now - lastEmit >= interval) {
+      lastEmit = now;
+      stats.elapsedMs = now - t0;
+      yield { type: 'progress', stats: snap(stats), top: topN(state) };
+    }
+  }
   stats.elapsedMs = performance.now() - t0;
-  return { state, stats, errors };
+  yield { type: 'done', stats: snap(stats), top: topN(state), state, errors };
 }
 
+export async function run(input) {
+  for await (const ev of runStream(input, { interval: 1e9 })) {
+    if (ev.type === 'done') return { state: ev.state, stats: ev.stats, errors: ev.errors };
+  }
+  throw new Error('engine produced no output');
+}
+
+function snap(s) { return { ...s, byReason: { ...s.byReason } }; }
+
 function apply(e, s) {
-  if (e.type === 'deposit') {
-    s.set(e.user, (s.get(e.user) ?? 0) + e.amount);
-  } else if (e.type === 'transfer') {
+  if (e.type === 'deposit') s.set(e.user, (s.get(e.user) ?? 0) + e.amount);
+  else if (e.type === 'transfer') {
     s.set(e.from, s.get(e.from) - e.amount);
     s.set(e.to, (s.get(e.to) ?? 0) + e.amount);
   }
@@ -118,6 +140,3 @@ if (isMain) {
     process.exit(2);
   }
 }
-
-// Silence unused-import warnings in some environments.
-void fileURLToPath;

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chronofold</title>
+<style>
+:root{--bg:#EFE9DD;--surface:#F6F2E8;--ink:#1C1A17;--muted:#6E6A60;--rule:#D8D2C5;--accent:#B5482F;--ok:#2A6B6E}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.mono{font-family:JetBrains Mono,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+.wrap{max-width:1100px;margin:0 auto;padding:48px 36px}
+header{display:flex;align-items:baseline;gap:18px;margin-bottom:28px}
+h1{margin:0;font:500 30px/1 'Source Serif Pro',Georgia,serif;letter-spacing:.5px}
+.tag{color:var(--muted);font-style:italic;font-family:'Source Serif Pro',Georgia,serif}
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:22px 24px;margin-bottom:18px}
+.row{display:flex;gap:14px;align-items:center}
+input[type=text]{flex:1;padding:11px 14px;border:1px solid var(--rule);border-radius:6px;background:#fff;color:var(--ink);font:14px JetBrains Mono,Menlo,Consolas,monospace}
+input[type=text]:focus{outline:none;border-color:var(--ink)}
+button{padding:11px 20px;border:1px solid var(--ink);border-radius:6px;background:var(--ink);color:var(--bg);font-weight:600;cursor:pointer;letter-spacing:.3px}
+button:hover{background:var(--accent);border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.hint{color:var(--muted);font-size:13px;margin-top:8px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.stat{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:16px 18px}
+.stat .k{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:500 28px JetBrains Mono,Menlo,Consolas,monospace;margin-top:6px}
+.stat.bad .v{color:var(--accent)} .stat.good .v{color:var(--ok)}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+@media(max-width:780px){.grid{grid-template-columns:repeat(2,1fr)}.split{grid-template-columns:1fr}}
+.h{font:500 14px 'Source Serif Pro',Georgia,serif;letter-spacing:.4px;color:var(--muted);margin:0 0 12px;text-transform:uppercase}
+.lb{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--rule);font-family:JetBrains Mono,Menlo,Consolas,monospace;font-size:13px}
+.lb:last-child{border-bottom:0} .lb .n{color:var(--muted)}
+.err{display:flex;justify-content:space-between;font:12px JetBrains Mono,Menlo,Consolas,monospace;padding:4px 0;color:var(--accent)}
+.err .l{color:var(--muted)}
+#errlist{max-height:240px;overflow:auto}
+.banner{display:none;padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:14px}
+.banner.show{display:block}
+.banner.err{background:#F6E2DB;border:1px solid var(--accent);color:var(--accent)}
+.banner.ok{background:#E1ECEC;border:1px solid var(--ok);color:var(--ok)}
+footer{color:var(--muted);font-size:12px;text-align:center;margin-top:36px;letter-spacing:.05em}
+</style></head>
+<body><div class="wrap">
+<header><h1>Chronofold</h1><span class="tag">Fold a million events into one truth.</span></header>
+<div class="card"><div class="row">
+  <input id="path" type="text" placeholder="Paste path to a JSONL event file…" autocomplete="off" spellcheck="false">
+  <button id="go">Fold</button></div>
+  <div class="hint">Tip: generate a sample with <span class="mono">node demo-gen.js 100000 demo.jsonl</span></div></div>
+<div id="banner" class="banner"></div>
+<div class="grid">
+  <div class="stat"><div class="k">Processed</div><div class="v mono" id="s-proc">—</div></div>
+  <div class="stat good"><div class="k">Valid</div><div class="v mono" id="s-valid">—</div></div>
+  <div class="stat bad"><div class="k">Invalid + corrupt</div><div class="v mono" id="s-bad">—</div></div>
+  <div class="stat"><div class="k">Throughput / sec</div><div class="v mono" id="s-tput">—</div></div></div>
+<div class="split">
+  <div class="card"><div class="h">Top entities by value</div><div id="leaderboard" class="mono"></div></div>
+  <div class="card"><div class="h">Recent rejections</div><div id="errlist"></div></div></div>
+<footer>chronofold • zero dependencies</footer></div>
+<script>
+const $=id=>document.getElementById(id), fmt=n=>Number(n).toLocaleString();
+let es=null;
+const setBanner=(k,m)=>{const b=$('banner');b.className='banner show '+k;b.textContent=m};
+const clearBanner=()=>$('banner').className='banner';
+function render(ev){
+  if(ev.type==='progress'||ev.type==='done'){
+    const s=ev.stats;
+    $('s-proc').textContent=fmt(s.processed);
+    $('s-valid').textContent=fmt(s.valid);
+    $('s-bad').textContent=fmt(s.invalid+s.corrupt);
+    const sec=s.elapsedMs/1000, t=sec>0?Math.round(s.processed/sec):0;
+    $('s-tput').textContent=fmt(t);
+    const lb=$('leaderboard');lb.innerHTML='';
+    (ev.top||[]).forEach(([k,v])=>{const r=document.createElement('div');r.className='lb';r.innerHTML='<span class="n">'+k+'</span><span>'+fmt(v)+'</span>';lb.appendChild(r)});
+  }
+  if(ev.type==='done'){$('go').disabled=false;setBanner('ok',`Done in ${ev.stats.elapsedMs.toFixed(0)} ms — ${fmt(ev.stats.processed)} events folded`);fetchErrors()}
+  if(ev.type==='error'){$('go').disabled=false;setBanner('err','Engine error: '+ev.message)}
+}
+async function fetchErrors(){
+  if(!window._runId)return;
+  try{const r=await fetch('/state/'+window._runId);if(!r.ok)return;const d=await r.json();
+    const list=$('errlist');list.innerHTML='';
+    const recent=(d.errors||[]).slice(-50).reverse();
+    if(!recent.length){list.innerHTML='<div class="hint">No rejections.</div>';return}
+    recent.forEach(e=>{const r=document.createElement('div');r.className='err';r.innerHTML='<span class="l">line '+e.line+'</span><span>'+(e.type?e.type+':':'')+e.reason+'</span>';list.appendChild(r)});
+  }catch{}
+}
+async function start(){
+  const path=$('path').value.trim();
+  if(!path){setBanner('err','Provide a path to a JSONL file.');return}
+  $('go').disabled=true;clearBanner();$('errlist').innerHTML='';$('leaderboard').innerHTML='';
+  if(es){es.close();es=null}
+  try{
+    const r=await fetch('/run',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({path})});
+    if(!r.ok){setBanner('err',(await r.json()).error||'failed to start');$('go').disabled=false;return}
+    const{runId}=await r.json();window._runId=runId;
+    es=new EventSource('/events/'+runId);
+    es.onmessage=m=>{try{render(JSON.parse(m.data))}catch{}};
+    es.onerror=()=>{es.close();es=null};
+  }catch(e){setBanner('err','Network error: '+e.message);$('go').disabled=false}
+}
+$('go').addEventListener('click',start);
+$('path').addEventListener('keydown',e=>{if(e.key==='Enter')start()});
+</script></body></html>
