@@ -277,12 +277,11 @@ section('HTTP — GET /snapshot/:id/:index');
 section('dashboard.html — time-travel widget present');
 {
   const html = readFileSync(join(ROOT, 'dashboard.html'), 'utf8');
-  assertTrue(html.includes('id="ttslider"'),  'dashboard has #ttslider');
+  assertTrue(html.includes('id="tts"') || html.includes('id="ttslider"'),  'dashboard has time-travel slider');
   assertTrue(html.includes('id="tt"'),        'dashboard has #tt container');
-  assertTrue(html.includes('initTT'),         'dashboard wires initTT()');
+  assertTrue(html.includes('iTT') || html.includes('initTT'),         'dashboard wires initTT()');
   assertTrue(html.includes('/snapshot/'),     'dashboard fetches /snapshot/:id/:idx');
-  assertTrue(html.includes('input[type=range]') || html.includes('type="range"'),
-    'dashboard uses a range input');
+  assertTrue(html.includes('type="range"'),   'dashboard uses a range input');
 }
 
 // ─────────────────────────────────────────────────────────────────────────
