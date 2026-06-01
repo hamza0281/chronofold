@@ -402,18 +402,6 @@ Result: 59 passed, 0 failed  ✅
 
 ---
 
-## Project Documents
-
-| Document | What's inside |
-|---|---|
-| [`CHRONOFOLD.md`](../CHRONOFOLD.md) | Full project spec — concept, features, architecture, UI design, demo script |
-| [`IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) | Phase-by-phase build plan with line budgets and risk register |
-
----
-
-
----
-
 ## 🏆 Bonus: Cross-Constraint Combo
 
 > *"Your solution demonstrates that two or more of your constraints created an emergent design pattern that wouldn't exist without their intersection."*
@@ -498,7 +486,7 @@ ESLint flat config at `eslint.config.mjs`. Rules: `no-var`, `prefer-const`, `no-
 
 <div align="center">
 
-**Built in 3 days. 420 lines. Zero dependencies.**
+
 
 **[⭐ Star on GitHub](https://github.com/hamza0281/chronofold)** · **[🚀 Live Demo](https://chronofold-production-1668.up.railway.app)**
 
