@@ -429,11 +429,93 @@ Result: 59 passed, 0 failed  ✅
 
 ---
 
+## 🏆 Bonus: Cross-Constraint Combo
+
+> *"Your solution demonstrates that two or more of your constraints created an emergent design pattern that wouldn't exist without their intersection."*
+
+Chronofold has one — and it's the core of the entire architecture.
+
+**The collision:** `500-line budget` × `<2s response` × `Data Processing domain`
+
+Without the **500-line cap**, the natural approach would be a switch statement dispatching on event type — readable, explicit, but hardcoded. Adding a new event type means editing the engine.
+
+Without the **<2s constraint**, the natural approach would be loading the file into memory, running a reduce, returning the result. Simple. But it breaks on large files.
+
+The intersection of both constraints forced a single insight: **rules must be data, not code, and the engine must never see the file as a whole.**
+
+This produced the declarative rules pattern:
+
+```javascript
+// rules.js — adding a new event type is one object, zero engine changes
+export const rules = {
+  deposit:  { validate: [positiveAmt, userOk], apply: credit },
+  transfer: { validate: [...6 rules...],       apply: move   },
+  // ↑ The engine loops over this generically. It never knows what "transfer" means.
+};
+```
+
+And the streaming architecture:
+
+```javascript
+// engine.js — the file is never in memory. One line at a time.
+for await (const raw of lines) {   // ← async generator, line by line
+  const fail = validate(event, state);  // ← rules.js decides
+  if (!fail) apply(event, state);       // ← rules.js acts
+}
+```
+
+Neither pattern would exist without both constraints pressing simultaneously. The line budget made the engine generic. The speed constraint made it streaming. Together they produced something that is simultaneously more elegant AND more capable than the unconstrained version would have been.
+
+**The constraints didn't restrict the design. They discovered it.**
+
+---
+
+## 💌 Language Love Letter
+
+> *"Include a section explaining what you learned about your assigned language that you didn't know before."*
+
+**JavaScript — what I thought I knew, and what I actually learned.**
+
+I came in thinking JavaScript's async story was about Promises and `.then()` chains. I left understanding that **async generators are a completely different mental model** — and a better one for data processing.
+
+The moment that changed everything:
+
+```javascript
+export async function* runStream(path) {
+  for await (const line of readline) {
+    // process line
+    yield { type: 'progress', stats };  // ← push to consumer without blocking
+  }
+  yield { type: 'done', state };
+}
+```
+
+This is not a Promise. It's not a callback. It's a **lazy sequence** — the consumer pulls values when it's ready, the producer pushes when it has something. The backpressure is implicit. The memory is constant. The composability is free.
+
+I also learned that JavaScript's `Map` is genuinely fast for this use case — O(1) get/set with string keys, no hash collision overhead in V8's implementation for short strings. The entire state of 1,000 wallets across 1 million events lives in a Map that never exceeds 40 MB.
+
+The thing I didn't expect: **the language constraint was the easiest one to satisfy, because JavaScript's async-first model is exactly what event-stream processing needs.** The language wasn't fighting the problem. It was designed for it.
+
+What I'd tell someone starting with JavaScript for data processing: skip the Promise tutorials. Go straight to async generators. That's where the language actually lives.
+
+---
+
+## ✅ Zero Warnings
+
+```bash
+npx eslint engine.js rules.js snapshot.js server.js demo-gen.js
+# → 0 errors, 0 warnings
+```
+
+ESLint flat config at `eslint.config.mjs`. Rules: `no-var`, `prefer-const`, `no-undef`, `semi`.
+
+---
+
 <div align="center">
 
 **Built in 3 days. 420 lines. Zero dependencies.**
 
-**[⭐ Star on GitHub](https://github.com/hamza0281/chronofold)** · **[🚀 Live Demo](https://chronofold-production.up.railway.app)**
+**[⭐ Star on GitHub](https://github.com/hamza0281/chronofold)** · **[🚀 Live Demo](https://chronofold-production-1668.up.railway.app)**
 
 *Code Olympics 2026 — Fast-Response Builder · Professional Builder · Data Processing · JavaScript*
 

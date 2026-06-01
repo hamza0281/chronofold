@@ -20,7 +20,7 @@ for (let i = 0; i < N; i++) {
   else if (x < 0.011) w(JSON.stringify({ type: debit, user: pick(users), amount: -50 }));
   else if (x < 0.31)  w(JSON.stringify({ type: credit, user: pick(users), amount: Math.floor(rand() * cMax) + 1 }));
   else {
-    let from = pick(users), to = pick(users);
+    const from = pick(users); let to = pick(users);
     if (from === to) to = users[(users.indexOf(to) + 1) % users.length];
     w(JSON.stringify({ type: pair, from, to, amount: Math.floor(rand() * pMax) + 1 }));
   }

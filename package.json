@@ -11,7 +11,8 @@
     "start": "node server.js",
     "demo": "node demo-gen.js",
     "engine": "node engine.js",
-    "lines": "node tools/count-lines.mjs"
+    "lines": "node tools/count-lines.mjs",
+    "lint": "eslint engine.js rules.js snapshot.js server.js demo-gen.js"
   },
   "keywords": [
     "event-sourcing",
