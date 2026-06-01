@@ -411,21 +411,6 @@ Result: 59 passed, 0 failed  ✅
 
 ---
 
-## The Pitch (3 minutes, judge version)
-
-> *"This is a JSONL event log. 1 million transactions. Banking, crypto, inventory — doesn't matter. Watch."*
->
-> *[drops file, hits Fold]*
->
-> *"1.3 seconds. Every transaction validated. Every overdraft caught. Every corrupt line skipped. The leaderboard you're seeing — that's the live state of every account, updating as the engine processes."*
->
-> *[drags time-travel slider to 500,000]*
->
-> *"That's the state at event 500,000. Half a second ago we couldn't have answered that. Now: instant. Under 15 milliseconds."*
->
-> *[opens engine.js, scrolls through it]*
->
-> *"129 lines. The entire streaming engine. No database. No framework. No dependencies. This is what JavaScript's async-first model was built for."*
 
 ---
 
